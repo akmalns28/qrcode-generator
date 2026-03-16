@@ -8,11 +8,6 @@
                     <div class="card-header fw-bold d-flex justify-content-between">
                         <p>QR Code Generator</p>
                         <div class="form-group">
-                            <!-- Button trigger for login form modal -->
-                            <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal"
-                                data-bs-target="#inlineForm">
-                                Bulk Excel
-                            </button>
 
                             <!--login form Modal -->
                             <div class="modal fade text-left" id="inlineForm" tabindex="-1"

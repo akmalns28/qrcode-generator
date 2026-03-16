@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="shortcut icon" href="{{ asset('assets/static/images/logo/favicon.png') }}" type="image/x-icon">
-    <title>{{ env('APP_NAME') }}</title>
+    <title>QR Code Generator</title>
 
     @include('layouts.partials.css')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
