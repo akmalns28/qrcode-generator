@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Endroid\QrCode\Color\Color;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\Logo\Logo;
 use Endroid\QrCode\QrCode;
 use Endroid\QrCode\Writer\PngWriter;
 use Illuminate\Http\Request;
@@ -62,6 +64,7 @@ class QrController extends Controller
             'transparent' => 'nullable|string',
             'columnIndex' => 'required|integer',
             'hasHeader' => 'nullable|string',
+            'logo' => 'nullable|image|mimes:png,jpg,jpeg,webp|max:2048|dimensions:min_width=1,min_height=1',
         ]);
 
         $size = (int) ($request->size ?? 300);
@@ -70,6 +73,18 @@ class QrController extends Controller
         $transparent = $request->transparent === '1';
         $columnIndex = (int) $request->columnIndex;
         $hasHeader = $request->hasHeader === '1';
+        $logo = null;
+
+        if ($request->hasFile('logo')) {
+            $logoFile = $request->file('logo');
+            [$logoWidth, $logoHeight] = getimagesize($logoFile->getRealPath());
+            $scale = ($size * 0.22) / max($logoWidth, $logoHeight);
+            $logo = new Logo(
+                path: $logoFile->getRealPath(),
+                resizeToWidth: max(1, (int) round($logoWidth * $scale)),
+                resizeToHeight: max(1, (int) round($logoHeight * $scale)),
+            );
+        }
 
         $file = $request->file('excel');
         $excelName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
@@ -112,14 +127,21 @@ class QrController extends Controller
             $fgColor = new Color($r1, $g1, $b1);
 
             if ($transparent) {
-                $bgColor = new Color(0, 0, 0, 0, true);
+                $bgColor = new Color(0, 0, 0, 127);
             } else {
                 [$r2, $g2, $b2] = sscanf($bgHex, '#%02x%02x%02x');
                 $bgColor = new Color($r2, $g2, $b2);
             }
 
-            $qr = new QrCode(data: $text, size: $size, margin: 10, foregroundColor: $fgColor, backgroundColor: $bgColor);
-            $result = $writer->write($qr);
+            $qr = new QrCode(
+                data: $text,
+                errorCorrectionLevel: $logo ? ErrorCorrectionLevel::High : ErrorCorrectionLevel::Low,
+                size: $size - 20, // Include the two 10 px margins in the requested PNG dimensions.
+                margin: 10,
+                foregroundColor: $fgColor,
+                backgroundColor: $bgColor,
+            );
+            $result = $writer->write($qr, $logo);
 
             Storage::disk('public')->put($uniqueFolder . '/' . $filename, $result->getString());
         }

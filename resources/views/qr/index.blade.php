@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="container mt-5">
+    <div class="container">
         <h2 class="mb-4">Generate QR dari Excel</h2>
 
         <div class="row">
@@ -36,7 +36,7 @@
 
                          <div class="form-check mb-3">
                             <input type="checkbox" name="transparent" id="transparent" class="form-check-input"
-                                value="1">
+                                value="1" checked>
                             <label for="transparent" class="form-check-label">Background Transparan</label>
                         </div>
 
@@ -51,8 +51,18 @@
                             <div class="mb-3">
                                 <label for="bg_color" class="form-label">Warna Background</label>
                                 <input type="color" name="bg_color" id="bg_color" class="form-control form-control-color"
-                                    value="#ffffff">
+                                    value="#ffffff" disabled>
                             </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="logo" class="form-label">Logo (Opsional)</label>
+                            <input type="file" name="logo" id="logo" class="form-control"
+                                accept="image/png,image/jpeg,image/webp" aria-describedby="bulkLogoHelp bulkLogoError">
+                            <small id="bulkLogoHelp" class="text-muted">
+                                PNG, JPG, atau WebP, maksimal 2 MB. Logo akan diletakkan di tengah setiap QR Code.
+                            </small>
+                            <div id="bulkLogoError" class="small mt-1 text-danger" role="alert"></div>
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">Generate QR & Download ZIP</button>
@@ -63,8 +73,11 @@
             <!-- Preview Data Excel -->
             <div class="col-md-6">
                 <div class="card p-4 shadow-sm">
-                    <h5 class="mb-3">Preview Data Excel</h5>
-                    <ul id="previewList" class="list-group"></ul>
+                    <h5 id="excelPreviewTitle" class="mb-3">Preview Data Excel</h5>
+                    <div class="overflow-auto" style="max-height: 400px;" role="region"
+                        aria-labelledby="excelPreviewTitle" tabindex="0">
+                        <ul id="previewList" class="list-group"></ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -73,6 +86,17 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         $(document).ready(function() {
+            function syncBackgroundInput() {
+                $('#bg_color').prop('disabled', $('#transparent').is(':checked'));
+            }
+
+            $('#transparent').on('change', syncBackgroundInput);
+            syncBackgroundInput();
+
+            $('#logo').on('change', function() {
+                $(this).removeClass('is-invalid');
+                $('#bulkLogoError').text('');
+            });
 
             // Preview Excel & pilih kolom
             $('#excel').on('change', function() {
@@ -108,8 +132,7 @@
                         function showPreview(colIndex) {
                             list.empty();
                             res.data.slice(startRow).forEach(function(row) {
-                                list.append('<li class="list-group-item">' + (row[
-                                    colIndex] ?? '') + '</li>');
+                                list.append($('<li>').addClass('list-group-item text-break').text(row[colIndex] ?? ''));
                             });
                         }
 
@@ -147,11 +170,35 @@
             $('#generateForm').on('submit', function(e) {
                 e.preventDefault();
                 var formData = new FormData(this);
+                var logo = document.getElementById('logo').files[0];
+                $('#bulkLogoError').text('');
+                $('#logo').removeClass('is-invalid');
+
+                if (logo && !['image/png', 'image/jpeg', 'image/webp'].includes(logo.type)) {
+                    $('#bulkLogoError').text('Format logo harus PNG, JPG, atau WebP.');
+                    $('#logo').addClass('is-invalid');
+                    return;
+                }
+
+                if (logo && logo.size > 2 * 1024 * 1024) {
+                    $('#bulkLogoError').text('Ukuran logo maksimal 2 MB.');
+                    $('#logo').addClass('is-invalid');
+                    return;
+                }
+
+                var downloadRequest;
 
                 $.ajax({
                     url: $(this).attr('action'),
                     type: 'POST',
                     data: formData,
+                    headers: {
+                        Accept: 'application/json'
+                    },
+                    xhr: function() {
+                        downloadRequest = $.ajaxSettings.xhr();
+                        return downloadRequest;
+                    },
                     xhrFields: {
                         responseType: 'blob'
                     },
@@ -175,7 +222,20 @@
                         link.click();
                         link.remove();
                     },
-                    error: function() {
+                    error: async function(xhr) {
+                        if (xhr.status === 422 && downloadRequest.response instanceof Blob) {
+                            try {
+                                var validation = JSON.parse(await downloadRequest.response.text());
+                                if (validation.errors && validation.errors.logo) {
+                                    $('#bulkLogoError').text(validation.errors.logo[0]);
+                                    $('#logo').addClass('is-invalid');
+                                    return;
+                                }
+                            } catch (error) {
+                                alert('Gagal membaca respons validasi.');
+                                return;
+                            }
+                        }
                         alert('Gagal generate QR!');
                     }
                 });
